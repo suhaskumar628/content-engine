@@ -1,20 +1,22 @@
 import os
 import json
 import google.generativeai as genai
+# We import as 'YTA' to prevent any naming conflicts
+from youtube_transcript_api import YouTubeTranscriptApi as YTA
+from youtube_transcript_api import TranscriptsDisabled, NoTranscriptFound
 from flask import Flask, render_template, request, jsonify
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") 
-# Optional: Add your Stripe Payment Link in Render Environment Variables later
 STRIPE_LINK = os.environ.get("STRIPE_LINK", "#") 
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
 def get_video_id(url):
+    """Extracts video ID from a YouTube URL"""
     if "v=" in url:
         return url.split("v=")[1].split("&")[0]
     elif "youtu.be/" in url:
@@ -27,8 +29,6 @@ def generate_viral_content(transcript_text):
     
     model = genai.GenerativeModel('gemini-1.5-flash')
     
-    # --- THE MONEY PROMPT ---
-    # Optimized for LinkedIn/Twitter virality (High value for business users)
     prompt = f"""
     You are a viral content strategist for B2B founders. Analyze this YouTube transcript.
     
@@ -45,12 +45,10 @@ def generate_viral_content(transcript_text):
     
     try:
         response = model.generate_content(prompt)
-        # Clean potential markdown formatting from JSON response
         clean_text = response.text.replace("```json", "").replace("```", "").strip()
         data = json.loads(clean_text)
         
-        # --- REVENUE LOGIC: THE WATERMARK ---
-        # We append this to the content so it travels with the post
+        # Watermark
         watermark = "\n\nPS: I generated this post in 10 seconds using ContentEngine. 🚀"
         data['linkedin_post'] += watermark
         
@@ -64,7 +62,6 @@ def generate_viral_content(transcript_text):
 
 @app.route('/')
 def home():
-    # Pass the Stripe link to the frontend
     return render_template('index.html', stripe_link=STRIPE_LINK)
 
 @app.route('/generate', methods=['POST'])
@@ -80,14 +77,15 @@ def generate():
         return jsonify({"error": "Invalid YouTube URL"}), 400
 
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+        # UPDATED LINE: Using the alias 'YTA' to avoid namespace errors
+        transcript_list = YTA.get_transcript(video_id)
         transcript_text = " ".join([t['text'] for t in transcript_list])
         
         result = generate_viral_content(transcript_text)
         return jsonify(result)
 
     except (TranscriptsDisabled, NoTranscriptFound):
-        return jsonify({"error": "No captions available. Try a video with subtitles!"}), 400
+        return jsonify({"error": "No captions available for this video."}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

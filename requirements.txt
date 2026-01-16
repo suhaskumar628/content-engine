@@ -1,4 +1,4 @@
-flask
-google-generativeai
-youtube-transcript-api
-gunicorn
+flask==3.0.0
+google-generativeai==0.3.2
+youtube-transcript-api==0.6.2
+gunicorn==21.2.0
